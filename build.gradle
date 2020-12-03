@@ -145,3 +145,29 @@ subprojects {
         }
     }
 }
+
+// For all the spring projects we test against multiple versions of spring to ensure forwards compatability.
+[project(':mats-spring'), project(':mats-spring-jms'), project(':mats-spring-test')].each { subProjectUsingSpring ->
+    subProjectUsingSpring.with {
+        def springVersionsToTest = ['4.1.+', '4.2.+', '4.3.+', '5.0.+', '5.1.+', '5.2.+']
+        springVersionsToTest.each {version ->
+            // Create a configuration which extends from testCompile
+            def configWithSpecificSpringVersion = configurations.create("testSpringCompile_" + version)
+            configWithSpecificSpringVersion.extendsFrom(configurations.testCompile)
+
+            // With this new configuration force all spring artifacts to use the given spring version
+            configWithSpecificSpringVersion.resolutionStrategy.eachDependency {
+                if (it.requested.group == 'org.springframework') {
+                    it.useVersion version
+                }
+            }
+
+            // Create a test task which uses the classpath of this custom configuration. Hook the task as a dependency
+            // for the 'check' task. This task is run by default by travis-ci.
+            tasks.create(name: "testSpring_$version", type: Test) {
+                classpath = configWithSpecificSpringVersion + sourceSets.main.output + sourceSets.test.output
+                check.dependsOn it
+            }
+        }
+    }
+}
